@@ -30,20 +30,20 @@
 
         fn_layer {
             // ---------------------------------------------------------------------------------------------------------------------------------
-            // |BT_CLR|  F1  |  F2  |  F3  |  F4  |  F5  |                                                   |      | NLCK |  =   |  /   |  *   |      |
-            // |      |  F6  |  F7  |  F8  |  F9  |  F10 |                                                   |      |  7   |  8   |  9   |  -   |      |
-            // |      |      |      |      |      |      |                                                   |      |  4   |  5   |  6   |  +   |      |
-            // |      |      |      |      |      | PTSC |      |      |      |         |      |      |      |      |  1   |  2   |  3   | ENT  |      |
-            //        |      | INS  |      |      |      |      |  FN  |      |         |      |      |      |      |      |      |  .   | ENT  |
-            //                                                         |      |         |      |
+            // |BT_CLR|  F1  |        F2    |     F3  |    F4              F5  |                                                                                    |         |  NLCK     |   =     |   /       |   *   |       |
+            // |      |  F6  |        F7    |     F8  |    F9           |  F10 |                                                                                    |         |   7       |   8     |   9       |   -   |       |
+            // |      |      |              |         |                 |      |                                                                                    |  UP     |   4       |   5     |   6       |   +   |       |
+            // |      |      |              |         |                 | PTSC |                 |            |            |            |       |      |            |  DN     |   1       |   2     |   3       |  ENT  |       |
+            //        |      |       INS    |         |                 |      |      SPACE      | BT 0       |   BT1      |            |       |      |                      |   0       |   0     |   .       |  ENT  |
+            //                                                                                   | BT 2       |            |            |        
 
             bindings = <
-&bt BT_CLR  &kp F1      &kp F2      &kp F3   &kp F4           &kp F5                                                                                         &trans  &kp KP_NUM  &kp EQUAL  &kp SLASH  &kp STAR   &trans
-&trans      &kp F6      &kp F7      &kp F8   &kp F9           &kp F10                                                                                        &trans  &kp N7      &kp N8     &kp N9     &kp MINUS  &trans
-&trans      &kp F11     &kp F12     &kp INS  &kp PRINTSCREEN  &trans                                                                                         &trans  &kp N4      &kp N5     &kp N6     &kp PLUS   &trans
-&bootloader &trans      &trans      &trans   &trans           &trans                &trans          &trans          &trans  &trans                           &trans  &kp N1      &kp N2     &kp N3     &kp ENTER  &trans
-            &trans      &trans      &trans   &trans                    &kp DEL      &bt BT_SEL 0    &bt BT_SEL 1    &trans  &trans   &trans                          &trans      &trans     &kp DOT    &kp ENTER
-                                                                                                    &bt BT_SEL 2    &trans
+            &bt BT_CLR  &kp F1      &kp F2      &kp F3   &kp F4           &kp F5                                                                                 &studio_unlock &kp KP_NUM  &kp EQUAL  &kp SLASH  &kp STAR   &trans
+            &trans      &kp F6      &kp F7      &kp F8   &kp F9           &kp F10                                                                                   &trans      &kp N7      &kp N8     &kp N9     &kp MINUS  &trans
+            &trans      &kp F11     &kp F12     &kp INS  &kp PRINTSCREEN  &trans                                                                                    &kp UP      &kp N4      &kp N5     &kp N6     &kp PLUS   &trans
+            &bootloader &trans      &trans      &trans   &trans           &trans                  &trans          &trans                  &trans  &trans            &kp DOWN    &kp N1      &kp N2     &kp N3     &kp ENTER  &trans
+            &trans      &trans      &trans   &trans                                   &kp SPACE   &bt BT_SEL 0    &bt BT_SEL 1            &trans  &trans   &trans               &kp N0      &kp N0     &kp DOT    &kp ENTER
+                                                                                                  &bt BT_SEL 2    &trans
             >;
         };
     };
