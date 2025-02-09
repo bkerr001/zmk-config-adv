@@ -2,7 +2,7 @@
 #include "adv-layouts.dtsi"
 
 &adv_physical_layout {
-    transform = <default_transform>;
+    transform = <&default_transform>;
 };
 
 /{
