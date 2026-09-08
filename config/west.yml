@@ -1,24 +1,53 @@
+
 manifest:
+
   remotes:
+
     - name: zmkfirmware
+
       url-base: https://github.com/zmkfirmware
 
     - name: zephyrproject
+
       url-base: https://github.com/zephyrproject-rtos
 
+    - name: seeedstudio
+
+      url-base: https://github.com/Seeed-Studio
+
   projects:
+
     - name: zmk
+
       remote: zmkfirmware
+
       revision: main
+
       import:
+
         file: app/west.yml
+
         name-blocklist:
+
           - zephyr
 
     - name: zephyr
+
       remote: zephyrproject
+
       revision: v4.3.0
+
       import: true
 
+    - name: platform-seeedboards
+
+      remote: seeedstudio
+
+      revision: main
+
+      path: modules/platform-seeedboards
+
   self:
+
     path: config
+
