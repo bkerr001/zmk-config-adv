@@ -1,4 +1,5 @@
 
+
 manifest:
 
   remotes:
@@ -45,7 +46,7 @@ manifest:
 
       revision: main
 
-      path: modules/platform-seeedboards
+      path: modules/platform-seeedboard
 
   self:
 
