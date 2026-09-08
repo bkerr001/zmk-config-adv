@@ -49,13 +49,18 @@ jobs:
 
           west update --fetch-opt=--filter=tree:0
 
-      - name: Install Zephyr Python requirements
-
-        working-directory: /tmp/zmk-config
-
+      - name: Install Zephyr Python tooling
         run: |
+           apt-get update
+           apt-get install -y --no-install-recommends \
+             python3-pip \
+             python3-venv
 
-          python3 -m pip install -r zephyr/scripts/requirements.txt
+      - name: Install Zephyr Python requirements
+        working-directory: /tmp/zmk-config
+        run: |
+           python3 -m pip install --break-system-packages \
+             -r zephyr/scripts/requirements.txt
 
       - name: Zephyr export
 
