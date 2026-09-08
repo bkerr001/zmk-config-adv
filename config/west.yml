@@ -1,23 +1,47 @@
-
+#
+#manifest:
+#
+#  remotes:
+#
+#    - name: zmkfirmware
+#
+#      url-base: https://github.com/zmkfirmware
+#
+#  projects:
+#
+#    - name: zmk
+#
+#      remote: zmkfirmware
+#
+#      revision: main
+#
+#      import: app/west.yml
+#
+#  self:
+#
+#    path: config
+#
 manifest:
-
   remotes:
-
     - name: zmkfirmware
-
       url-base: https://github.com/zmkfirmware
 
+    - name: zephyrproject
+      url-base: https://github.com/zephyrproject-rtos
+
   projects:
-
     - name: zmk
-
       remote: zmkfirmware
-
       revision: main
+      import:
+        file: app/west.yml
+        name-blocklist:
+          - zephyr
 
-      import: app/west.yml
+    - name: zephyr
+      remote: zephyrproject
+      revision: main
+      import: true
 
   self:
-
     path: config
-
