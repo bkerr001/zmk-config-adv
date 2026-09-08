@@ -85,27 +85,12 @@ jobs:
           west --version
 
       - name: Build XIAO nRF54LM20A test firmware
-
         working-directory: /tmp/zmk-config
-
         run: |
-
-          west build \
-
-            -s zmk/app \
-
-            -d build \
-
-            -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" \
-
-            -- \
-
-            -DZMK_CONFIG=/tmp/zmk-config/config \
-
-            -DSHIELD=settings_reset \
-
-            -DZMK_EXTRA_MODULES="${GITHUB_WORKSPACE}"
-
+          pwd
+           ls -la
+           ls -la zmk/app
+          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DZMK_EXTRA_MODULES="${GITHUB_WORKSPACE}"
       - name: Collect artifacts
 
         if: success()
