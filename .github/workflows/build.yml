@@ -52,15 +52,11 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends python3-pip python3-venv
+
       - name: Install Zephyr Python requirements
-
         working-directory: /tmp/zmk-config
-
         run: |
-
-          python3 -m pip install --break-system-packages \
-
-            -r zephyr/scripts/requirements.txt
+          python3 -m pip install --break-system-packages -r zephyr/scripts/requirements.txt
 
       - name: Zephyr export
 
