@@ -37,19 +37,18 @@ jobs:
         working-directory: /tmp/zmk-config
         run: python3 -m pip install --break-system-packages -r zephyr/scripts/requirements.txt
 
-      - name: Inspect ZMK module board metadata
+      - name: Export Zephyr CMake package
+        working-directory: /tmp/zmk-config
+        run: west zephyr-export
+
+      - name: Disable legacy ZMK module board root
         working-directory: /tmp/zmk-config
         run: |
-          echo "=== ZMK APP MODULE TREE ==="
-          find zmk/app/module -maxdepth 3 -type f | sort | head -100
+          sed -i '/^[[:space:]]*board_root:[[:space:]]*\.$/d' zmk/app/module/zephyr/module.yml
 
-          echo
-          echo "=== ZMK MODULE METADATA ==="
-          find zmk/app -maxdepth 3 -type f \( -name 'module.yml' -o -name 'zephyr.module.yml' \) -print
+          echo "=== UPDATED ZMK MODULE.YML ==="
+          cat zmk/app/module/zephyr/module.yml
 
-          echo
-          echo "=== BOARD ROOT REFERENCES ==="
-          grep -R "board_root" -n zmk/app 2>/dev/null || true
       - name: Build XIAO nRF54LM20A test firmware
         working-directory: /tmp/zmk-config
         run: |
