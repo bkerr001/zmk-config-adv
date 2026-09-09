@@ -37,16 +37,19 @@ jobs:
         working-directory: /tmp/zmk-config
         run: python3 -m pip install --break-system-packages -r zephyr/scripts/requirements.txt
 
-      - name: Inspect ZMK module roots
+      - name: Inspect ZMK module board metadata
         working-directory: /tmp/zmk-config
         run: |
-          echo "=== ZMK MODULE.YML ==="
-          cat zmk/app/zephyr/module.yml
+          echo "=== ZMK APP MODULE TREE ==="
+          find zmk/app/module -maxdepth 3 -type f | sort | head -100
+
+          echo
+          echo "=== ZMK MODULE METADATA ==="
+          find zmk/app -maxdepth 3 -type f \( -name 'module.yml' -o -name 'zephyr.module.yml' \) -print
 
           echo
           echo "=== BOARD ROOT REFERENCES ==="
-          grep -R "board_root" -n zmk/app/zephyr zmk/app/module 2>/dev/null || true
-
+          grep -R "board_root" -n zmk/app 2>/dev/null || true
       - name: Build XIAO nRF54LM20A test firmware
         working-directory: /tmp/zmk-config
         run: |
