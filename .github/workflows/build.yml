@@ -49,17 +49,9 @@ jobs:
           west update --fetch-opt=--filter=tree:0
 
       - name: Install Python tooling
-
         run: |
-
           apt-get update
-
-          apt-get install -y --no-install-recommends \
-
-            python3-pip \
-
-            python3-venv
-
+          apt-get install -y --no-install-recommends python3-pip python3-venv
       - name: Install Zephyr Python requirements
 
         working-directory: /tmp/zmk-config
