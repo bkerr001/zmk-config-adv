@@ -1,4 +1,3 @@
-
 name: Build ZMK firmware
 
 on:
@@ -23,7 +22,7 @@ jobs:
 
       - name: Checkout
 
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Create workspace
 
@@ -49,18 +48,27 @@ jobs:
 
           west update --fetch-opt=--filter=tree:0
 
-      - name: Install Zephyr Python tooling
+      - name: Install Python tooling
+
         run: |
-           apt-get update
-           apt-get install -y --no-install-recommends \
-             python3-pip \
-             python3-venv
+
+          apt-get update
+
+          apt-get install -y --no-install-recommends \
+
+            python3-pip \
+
+            python3-venv
 
       - name: Install Zephyr Python requirements
+
         working-directory: /tmp/zmk-config
+
         run: |
-           python3 -m pip install --break-system-packages \
-             -r zephyr/scripts/requirements.txt
+
+          python3 -m pip install --break-system-packages \
+
+            -r zephyr/scripts/requirements.txt
 
       - name: Zephyr export
 
@@ -76,21 +84,54 @@ jobs:
 
         run: |
 
-          west list zephyr -f "Zephyr revision: {revision}"
+          echo "=== VERSIONS ==="
 
           west list zmk -f "ZMK revision: {revision}"
+
+          west list zephyr -f "Zephyr revision: {revision}"
 
           python3 --version
 
           west --version
 
-      - name: Build XIAO nRF54LM20A test firmware
+      - name: Verify Seeed board files
+
         working-directory: /tmp/zmk-config
+
         run: |
-          pwd
-           ls -la
-           ls -la zmk/app
-          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DZMK_EXTRA_MODULES="${GITHUB_WORKSPACE}"
+
+          echo "=== PLATFORM SEEEDBOARDS ==="
+
+          ls -la modules/platform-seeedboards
+
+          echo
+
+          echo "=== XIAO nRF54LM20A FILES ==="
+
+          find modules/platform-seeedboards -iname '*nrf54lm20a*' -print
+
+          echo
+
+          echo "=== BOARD ROOT CONTENTS ==="
+
+          find modules/platform-seeedboards/zephyr/boards \
+
+            -maxdepth 4 \
+
+            -type f \
+
+            | sort \
+
+            | grep -i 'nrf54lm20a' || true
+
+      - name: Build XIAO nRF54LM20A test firmware
+
+        working-directory: /tmp/zmk-config
+
+        run: |
+
+          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboards/zephyr
+
       - name: Collect artifacts
 
         if: success()
@@ -107,6 +148,10 @@ jobs:
 
             -exec cp {} artifacts/ \;
 
+          echo "=== ARTIFACTS ==="
+
+          find artifacts -type f -maxdepth 1 -print
+
       - name: Upload artifacts
 
         if: success()
@@ -118,4 +163,3 @@ jobs:
           name: xiao-nrf54lm20a-test
 
           path: /tmp/zmk-config/artifacts/
-
