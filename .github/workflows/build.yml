@@ -96,44 +96,10 @@ jobs:
 
           west --version
 
-      - name: Verify Seeed board files
-
-        working-directory: /tmp/zmk-config
-
-        run: |
-
-          echo "=== PLATFORM SEEEDBOARDS ==="
-
-          ls -la modules/platform-seeedboards
-
-          echo
-
-          echo "=== XIAO nRF54LM20A FILES ==="
-
-          find modules/platform-seeedboards -iname '*nrf54lm20a*' -print
-
-          echo
-
-          echo "=== BOARD ROOT CONTENTS ==="
-
-          find modules/platform-seeedboards/zephyr/boards \
-
-            -maxdepth 4 \
-
-            -type f \
-
-            | sort \
-
-            | grep -i 'nrf54lm20a' || true
-
       - name: Build XIAO nRF54LM20A test firmware
-
         working-directory: /tmp/zmk-config
-
         run: |
-
-          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboards/zephyr
-
+          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboard/zephyr
       - name: Collect artifacts
 
         if: success()
