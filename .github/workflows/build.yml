@@ -48,36 +48,53 @@ jobs:
           from pathlib import Path
           import yaml
 
-          patched = []
+          patched_files = []
+
+          def patch_board_entry(entry):
+              if not isinstance(entry, dict):
+                  return False
+
+              name = entry.get("name")
+              if not name:
+                  return False
+
+              if "full_name" not in entry:
+                  entry["full_name"] = name
+                  return True
+
+              return False
 
           for path in Path("zmk/app").rglob("board.yml"):
-              with path.open() as f:
+              with path.open("r") as f:
                   data = yaml.safe_load(f)
+
+              if not isinstance(data, dict):
+                  continue
 
               changed = False
 
-              if "board" in data:
-                  board = data["board"]
-                  if "full_name" not in board:
-                      board["full_name"] = board["name"]
-                      changed = True
+              board = data.get("board")
+              if board is not None:
+                  changed |= patch_board_entry(board)
 
-              if "boards" in data:
-                  for board in data["boards"]:
-                      if "full_name" not in board:
-                          board["full_name"] = board["name"]
-                          changed = True
+              boards = data.get("boards")
+              if isinstance(boards, list):
+                  for board_entry in boards:
+                      changed |= patch_board_entry(board_entry)
 
               if changed:
                   with path.open("w") as f:
                       yaml.safe_dump(data, f, sort_keys=False)
 
-                  patched.append(str(path))
+                  patched_files.append(str(path))
 
           print("Patched board metadata:")
-          for path in patched:
-              print(path)
+          for path in patched_files:
+              print(f"  {path}")
+
+          print(f"Total patched files: {len(patched_files)}")
           PY
+
       - name: Build XIAO nRF54LM20A test firmware
         working-directory: /tmp/zmk-config
         run: |
