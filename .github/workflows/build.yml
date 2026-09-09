@@ -1,134 +1,53 @@
-
 name: Build ZMK firmware
 
 on:
-
   push:
-
-  pull_request:
-
   workflow_dispatch:
 
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
 
     container:
-
       image: zmkfirmware/zmk-build-arm:stable
 
     steps:
-
       - name: Checkout
-
         uses: actions/checkout@v4
 
       - name: Create workspace
-
         run: |
-
           mkdir -p /tmp/zmk-config/config
-
           cp -R config/* /tmp/zmk-config/config/
 
       - name: West init
-
         working-directory: /tmp/zmk-config
-
-        run: |
-
-          west init -l config
+        run: west init -l config
 
       - name: West update
-
         working-directory: /tmp/zmk-config
+        run: west update --fetch-opt=--filter=tree:0
 
-        run: |
-
-          west update --fetch-opt=--filter=tree:0
-      - name: Show west projects
-
-        working-directory: /tmp/zmk-config
-
-        run: |
-
-          echo "=== WEST LIST ==="
-
-          west list
-
-          echo
-
-          echo "=== MODULE DIRECTORIES ==="
-
-          find /tmp/zmk-config -maxdepth 3 -type d -iname '*seeed*' -print
       - name: Install Python tooling
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends python3-pip python3-venv
+          apt-get install -y --no-install-recommends python3-pip
 
       - name: Install Zephyr Python requirements
         working-directory: /tmp/zmk-config
-        run: |
-          python3 -m pip install --break-system-packages -r zephyr/scripts/requirements.txt
+        run: python3 -m pip install --break-system-packages -r zephyr/scripts/requirements.txt
 
-      - name: Zephyr export
-
+      - name: Inspect ZMK module roots
         working-directory: /tmp/zmk-config
-
         run: |
+          echo "=== ZMK MODULE.YML ==="
+          cat zmk/app/zephyr/module.yml
 
-          west zephyr-export
-
-      - name: Show versions
-
-        working-directory: /tmp/zmk-config
-
-        run: |
-
-          echo "=== VERSIONS ==="
-
-          west list zmk -f "ZMK revision: {revision}"
-
-          west list zephyr -f "Zephyr revision: {revision}"
-
-          python3 --version
-
-          west --version
+          echo
+          echo "=== BOARD ROOT REFERENCES ==="
+          grep -R "board_root" -n zmk/app/zephyr zmk/app/module 2>/dev/null || true
 
       - name: Build XIAO nRF54LM20A test firmware
         working-directory: /tmp/zmk-config
         run: |
           west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboard/zephyr
-      - name: Collect artifacts
-
-        if: success()
-
-        working-directory: /tmp/zmk-config
-
-        run: |
-
-          mkdir -p artifacts
-
-          find build/zephyr -maxdepth 1 -type f \
-
-            \( -name '*.uf2' -o -name '*.bin' -o -name '*.hex' \) \
-
-            -exec cp {} artifacts/ \;
-
-          echo "=== ARTIFACTS ==="
-
-          find artifacts -type f -maxdepth 1 -print
-
-      - name: Upload artifacts
-
-        if: success()
-
-        uses: actions/upload-artifact@v4
-
-        with:
-
-          name: xiao-nrf54lm20a-test
-
-          path: /tmp/zmk-config/artifacts/
