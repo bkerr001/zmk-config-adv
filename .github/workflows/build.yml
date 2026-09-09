@@ -47,7 +47,21 @@ jobs:
         run: |
 
           west update --fetch-opt=--filter=tree:0
+      - name: Show west projects
 
+        working-directory: /tmp/zmk-config
+
+        run: |
+
+          echo "=== WEST LIST ==="
+
+          west list
+
+          echo
+
+          echo "=== MODULE DIRECTORIES ==="
+
+          find /tmp/zmk-config -maxdepth 3 -type d -iname '*seeed*' -print
       - name: Install Python tooling
         run: |
           apt-get update
