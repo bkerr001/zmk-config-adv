@@ -98,6 +98,33 @@ jobs:
           echo "=== VERIFY ADV360 ==="
           cat zmk/app/boards/kinesis/adv360pro/board.yml
 
+      - name: Patch obsolete Nordic Kconfig option
+        working-directory: /tmp/zmk-config
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("zmk/app/Kconfig")
+          text = path.read_text()
+
+          pattern = re.compile(
+              r'\nif SOC_FAMILY_NORDIC_NRF\s+'
+              r'config NRF_SOC_VALIDATE_HEADERS_DISABLED\s+'
+              r'default y\s+'
+              r'endif\s*',
+              re.MULTILINE
+          )
+
+          new_text, count = pattern.subn("\n", text)
+
+          if count != 1:
+              raise SystemExit(f"Expected to patch exactly 1 block, patched {count}")
+
+          path.write_text(new_text)
+
+          print("Removed obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED block")
+          PY
       - name: Build XIAO nRF54LM20A test firmware
 
         working-directory: /tmp/zmk-config
