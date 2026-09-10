@@ -46,14 +46,57 @@ jobs:
         run: |
           west sdk install --version 1.0.0 --install-dir /opt/zephyr-sdk-1.0.0
 
-
       - name: Patch ZMK board metadata for Zephyr 4.4
-
         working-directory: /tmp/zmk-config
-
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
 
-          # your existing Python board.yml patcher goes here
+          count = 0
+
+          for path in Path("zmk/app").rglob("board.yml"):
+              with path.open() as f:
+                  data = yaml.safe_load(f)
+
+              if not isinstance(data, dict):
+                  continue
+
+              changed = False
+
+              if isinstance(data.get("board"), dict):
+                  board = data["board"]
+
+                  if board.get("name") and not board.get("full_name"):
+                      board["full_name"] = board["name"]
+                      changed = True
+
+              if isinstance(data.get("boards"), list):
+                  for board in data["boards"]:
+                      if not isinstance(board, dict):
+                          continue
+
+                      if board.get("name") and not board.get("full_name"):
+                          board["full_name"] = board["name"]
+                          changed = True
+
+              if changed:
+                  with path.open("w") as f:
+                      yaml.safe_dump(data, f, sort_keys=False)
+
+                  print(f"Patched: {path}")
+                  count += 1
+
+          print(f"Total patched: {count}")
+          PY
+
+          echo
+          echo "=== VERIFY BLUEMICRO840 ==="
+          cat zmk/app/module/boards/jpconstantineau/bluemicro840/board.yml
+
+          echo
+          echo "=== VERIFY ADV360 ==="
+          cat zmk/app/boards/kinesis/adv360pro/board.yml
 
       - name: Build XIAO nRF54LM20A test firmware
 
