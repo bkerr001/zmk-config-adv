@@ -125,6 +125,141 @@ jobs:
 
           print("Removed obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED block")
           PY
+
+      - name: Patch ZMK for Zephyr input-only matrix support
+        working-directory: /tmp/zmk-config
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # 1. Make the legacy kscan include conditional.
+          path = Path("zmk/app/src/physical_layouts.c")
+          text = path.read_text()
+
+          text = text.replace(
+              '#include <zephyr/drivers/kscan.h>\n',
+              '#if IS_ENABLED(CONFIG_ZMK_KSCAN)\n'
+              '#include <zephyr/drivers/kscan.h>\n'
+              '#endif\n'
+          )
+
+          # 2. Guard the legacy callback itself.
+          text = text.replace(
+              'static void zmk_physical_layout_kscan_callback(',
+              '#if IS_ENABLED(CONFIG_ZMK_KSCAN)\n'
+              'static void zmk_physical_layout_kscan_callback('
+          )
+
+          marker = '''static void zmk_physical_layouts_kscan_process_msgq(struct k_work *item) {'''
+
+          text = text.replace(
+              marker,
+              '#endif /* CONFIG_ZMK_KSCAN */\n'
+              + marker
+          )
+
+          # 3. Guard legacy kscan shutdown.
+          old = '''    if (active) {
+              if (active->kscan) {
+                  kscan_disable_callback(active->kscan);
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  pm_device_runtime_put(active->kscan);
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_SUSPEND);
+          #endif
+              }
+          }'''
+
+          new = '''    if (active) {
+          #if IS_ENABLED(CONFIG_ZMK_KSCAN)
+              if (active->kscan) {
+                  kscan_disable_callback(active->kscan);
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  pm_device_runtime_put(active->kscan);
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_SUSPEND);
+          #endif
+              }
+          #endif
+          }'''
+
+          if old not in text:
+              raise SystemExit("Could not find old kscan shutdown block")
+
+          text = text.replace(old, new)
+
+          # 4. Guard legacy kscan startup.
+          old = '''    active = dest_layout;
+              if (active->kscan) {
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  int err = pm_device_runtime_get(active->kscan);
+                  if (err < 0) {
+                      LOG_WRN("PM runtime get of kscan device to enable it %d", err);
+                      return err;
+                  }
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_RESUME);
+          #endif
+                  kscan_config(active->kscan, zmk_physical_layout_kscan_callback);
+                  kscan_enable_callback(active->kscan);
+              }'''
+
+          new = '''    active = dest_layout;
+          #if IS_ENABLED(CONFIG_ZMK_KSCAN)
+              if (active->kscan) {
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  int err = pm_device_runtime_get(active->kscan);
+                  if (err < 0) {
+                      LOG_WRN("PM runtime get of kscan device to enable it %d", err);
+                      return err;
+                  }
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_RESUME);
+          #endif
+                  kscan_config(active->kscan, zmk_physical_layout_kscan_callback);
+                  kscan_enable_callback(active->kscan);
+              }
+          #endif'''
+
+          if old not in text:
+              raise SystemExit("Could not find old kscan startup block")
+
+          text = text.replace(old, new)
+
+          path.write_text(text)
+
+          # 5. Keep the event queue setting available for the new input path.
+          path = Path("zmk/app/Kconfig")
+          text = path.read_text()
+
+          old = '''if ZMK_KSCAN
+
+          config ZMK_KSCAN_EVENT_QUEUE_SIZE
+
+          int "Size of the event queue for KSCAN events to buffer events"
+
+          default 4
+
+          endif # ZMK_KSCAN'''
+
+          new = '''config ZMK_KSCAN_EVENT_QUEUE_SIZE
+
+          int "Size of the event queue for matrix input events to buffer events"
+
+          default 4'''
+
+          if old not in text:
+              raise SystemExit("Could not find ZMK_KSCAN_EVENT_QUEUE_SIZE block")
+
+          path.write_text(text.replace(old, new))
+
+          print("Patched physical_layouts.c for input-only operation")
+          print("Made event queue size independent of legacy kscan")
+          PY
+
+          # Disable the legacy ZMK kscan integration for this build.
+          echo 'CONFIG_ZMK_KSCAN=n' >> zmk/app/prj.conf
+
       - name: Build XIAO nRF54LM20A test firmware
 
         working-directory: /tmp/zmk-config
