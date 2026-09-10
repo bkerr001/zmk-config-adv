@@ -231,16 +231,9 @@ jobs:
 
 
 
-
-
       - name: Build XIAO nRF54LM20A test firmware
-
         working-directory: /tmp/zmk-config
-
         env:
-
           ZEPHYR_SDK_INSTALL_DIR: /opt/zephyr-sdk-1.0.0
-
         run: |
-
-          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboard/zephyr
+          west build -s zmk/app -d build -b "xiao_nrf54lm20a/nrf54lm20a/cpuapp" -- -DZMK_CONFIG=/tmp/zmk-config/config -DSHIELD=settings_reset -DBOARD_ROOT=/tmp/zmk-config/modules/platform-seeedboard/zephyr -DEXTRA_DTC_OVERLAY_FILE=/tmp/zmk-config/config/xiao_test.keymap
