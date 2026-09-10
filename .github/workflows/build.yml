@@ -31,7 +31,7 @@ jobs:
       - name: Install Python tooling
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends python3-pip xz-utils
+          apt-get install -y --no-install-recommends python3-pip xz-utils wget
 
       - name: Install Zephyr Python requirements
         working-directory: /tmp/zmk-config
