@@ -97,7 +97,6 @@ jobs:
           echo
           echo "=== VERIFY ADV360 ==="
           cat zmk/app/boards/kinesis/adv360pro/board.yml
-o
 
 
 
