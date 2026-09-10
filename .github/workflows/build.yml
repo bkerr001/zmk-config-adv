@@ -171,15 +171,35 @@ jobs:
           echo
           echo "=== VERIFY NORDIC VALIDATION PATCH ==="
 
-          if grep -n 'validate_binding_headers.c' zephyr/soc/nordic/CMakeLists.txt
-          then
-            echo "ERROR: validate_binding_headers.c is still enabled"
-            exit 1
-          else
-            echo "Nordic binding-header validator disabled"
-          fi
+          python3 - <<'PY'
 
+          from pathlib import Path
 
+          text = Path("zephyr/soc/nordic/CMakeLists.txt").read_text()
+
+          active_block = """zephyr_library_sources(
+
+            validate_base_addresses.c
+
+            validate_binding_headers.c
+
+            validate_enabled_instances.c
+
+            )
+
+          """
+
+          if active_block in text:
+
+              raise SystemExit(
+
+                  "ERROR: validate_binding_headers.c is still in the active source block"
+
+              )
+
+          print("Nordic binding-header validator disabled")
+
+          PY
 
 
       
