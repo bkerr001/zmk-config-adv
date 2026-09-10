@@ -103,145 +103,137 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path("zmk/app/src/physical_layouts.c")
-          text = path.read_text()
+          lines = path.read_text().splitlines()
 
-          # Guard the removed legacy kscan header.
-          text, count = re.subn(
-              r'#include <zephyr/drivers/kscan\.h>\n',
-              '#if IS_ENABLED(CONFIG_ZMK_KSCAN)\n'
-              '#include <zephyr/drivers/kscan.h>\n'
-              '#endif\n',
-              text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit(f"Expected 1 kscan include, patched {count}")
+          out = []
+          i = 0
 
-          # Guard the legacy kscan callback only.
-          callback_start = text.find(
-              "static void zmk_physical_layout_kscan_callback("
-          )
-          callback_end = text.find(
-              "static void zmk_physical_layouts_kscan_process_msgq(",
-              callback_start,
-          )
+          while i < len(lines):
+              line = lines[i]
 
-          if callback_start == -1 or callback_end == -1:
-              raise SystemExit("Could not locate legacy kscan callback")
+              # 1. Guard legacy kscan header.
+              if line == "#include <zephyr/drivers/kscan.h>":
+                  out.extend([
+                      "#if IS_ENABLED(CONFIG_ZMK_KSCAN)",
+                      line,
+                      "#endif",
+                  ])
+                  i += 1
+                  continue
 
-          callback = text[callback_start:callback_end]
-          text = (
-              text[:callback_start]
-              + "#if IS_ENABLED(CONFIG_ZMK_KSCAN)\n"
-              + callback
-              + "#endif /* CONFIG_ZMK_KSCAN */\n"
-              + text[callback_end:]
-          )
+              # 2. Guard legacy kscan callback.
+              if line.startswith("static void zmk_physical_layout_kscan_callback("):
+                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
 
-          # Guard legacy kscan disable/suspend section.
-          old = """    if (active) {
-              if (active->kscan) {
-                  kscan_disable_callback(active->kscan);
-          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
-                  pm_device_runtime_put(active->kscan);
-          #elif IS_ENABLED(CONFIG_PM_DEVICE)
-                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_SUSPEND);
-          #endif
-              }
-          }
-          """
+                  while i < len(lines):
+                      out.append(lines[i])
 
-          new = """    if (active) {
-          #if IS_ENABLED(CONFIG_ZMK_KSCAN)
-              if (active->kscan) {
-                  kscan_disable_callback(active->kscan);
-          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
-                  pm_device_runtime_put(active->kscan);
-          #elif IS_ENABLED(CONFIG_PM_DEVICE)
-                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_SUSPEND);
-          #endif
-              }
-          #endif
-          }
-          """
+                      if lines[i] == "}":
+                          i += 1
+                          break
 
-          if old not in text:
-              raise SystemExit("Could not locate legacy kscan shutdown block")
+                      i += 1
 
-          text = text.replace(old, new, 1)
+                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
+                  continue
 
-          # Guard legacy kscan enable/config section.
-          old = """    active = dest_layout;
-              if (active->kscan) {
-          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
-                  int err = pm_device_runtime_get(active->kscan);
-                  if (err < 0) {
-                      LOG_WRN("PM runtime get of kscan device to enable it %d", err);
-                      return err;
-                  }
-          #elif IS_ENABLED(CONFIG_PM_DEVICE)
-                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_RESUME);
-          #endif
-                  kscan_config(active->kscan, zmk_physical_layout_kscan_callback);
-                  kscan_enable_callback(active->kscan);
-              }
-          """
+              # 3. Guard shutdown block.
+              if line == "    if (active) {" and i + 1 < len(lines) and lines[i + 1] == "        if (active->kscan) {":
+                  out.append(line)
+                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
+                  i += 1
 
-          new = """    active = dest_layout;
-          #if IS_ENABLED(CONFIG_ZMK_KSCAN)
-              if (active->kscan) {
-          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
-                  int err = pm_device_runtime_get(active->kscan);
-                  if (err < 0) {
-                      LOG_WRN("PM runtime get of kscan device to enable it %d", err);
-                      return err;
-                  }
-          #elif IS_ENABLED(CONFIG_PM_DEVICE)
-                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_RESUME);
-          #endif
-                  kscan_config(active->kscan, zmk_physical_layout_kscan_callback);
-                  kscan_enable_callback(active->kscan);
-              }
-          #endif
-          """
+                  depth = 0
+                  while i < len(lines):
+                      current = lines[i]
+                      out.append(current)
 
-          if old not in text:
-              raise SystemExit("Could not locate legacy kscan startup block")
+                      depth += current.count("{")
+                      depth -= current.count("}")
 
-          text = text.replace(old, new, 1)
-          path.write_text(text)
+                      i += 1
 
-          # Keep the event queue option available when legacy KSCAN is disabled.
+                      if depth == 0:
+                          break
+
+                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
+
+                  # Preserve the closing brace for if (active).
+                  if i < len(lines) and lines[i] == "    }":
+                      out.append(lines[i])
+                      i += 1
+
+                  continue
+
+              # 4. Guard startup block.
+              if line == "    if (active->kscan) {" and i > 0 and lines[i - 1] == "    active = dest_layout;":
+                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
+
+                  depth = 0
+                  while i < len(lines):
+                      current = lines[i]
+                      out.append(current)
+
+                      depth += current.count("{")
+                      depth -= current.count("}")
+
+                      i += 1
+
+                      if depth == 0:
+                          break
+
+                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
+                  continue
+
+              out.append(line)
+              i += 1
+
+          path.write_text("\n".join(out) + "\n")
+
+          # Move ZMK_KSCAN_EVENT_QUEUE_SIZE outside the legacy KSCAN conditional.
           path = Path("zmk/app/Kconfig")
-          text = path.read_text()
+          lines = path.read_text().splitlines()
 
-          pattern = re.compile(
-              r'if ZMK_KSCAN\s+'
-              r'config ZMK_KSCAN_EVENT_QUEUE_SIZE\s+'
-              r'int "Size of the event queue for KSCAN events to buffer events"\s+'
-              r'default 4\s+'
-              r'endif # ZMK_KSCAN',
-              re.MULTILINE,
-          )
+          out = []
+          i = 0
+          patched_queue = False
 
-          replacement = """config ZMK_KSCAN_EVENT_QUEUE_SIZE
-              int "Size of the event queue for matrix input events to buffer events"
-              default 4"""
+          while i < len(lines):
+              if (
+                  i + 6 < len(lines)
+                  and lines[i] == "if ZMK_KSCAN"
+                  and lines[i + 2] == "config ZMK_KSCAN_EVENT_QUEUE_SIZE"
+              ):
+                  out.extend([
+                      "config ZMK_KSCAN_EVENT_QUEUE_SIZE",
+                      '    int "Size of the event queue for matrix input events to buffer events"',
+                      "    default 4",
+                  ])
 
-          text, count = pattern.subn(replacement, text, count=1)
+                  # Skip:
+                  # if ZMK_KSCAN
+                  # blank
+                  # config ...
+                  # int ...
+                  # default ...
+                  # blank
+                  # endif ...
+                  i += 7
+                  patched_queue = True
+                  continue
 
-          if count != 1:
-              raise SystemExit(
-                  f"Expected 1 ZMK_KSCAN_EVENT_QUEUE_SIZE block, patched {count}"
-              )
+              out.append(lines[i])
+              i += 1
 
-          path.write_text(text)
+          if not patched_queue:
+              raise SystemExit("Could not locate ZMK_KSCAN_EVENT_QUEUE_SIZE block")
+
+          path.write_text("\n".join(out) + "\n")
 
           print("Patched physical_layouts.c for input-only operation")
-          print("Made matrix event queue independent of legacy KSCAN")
+          print("Moved matrix event queue config outside legacy ZMK_KSCAN")
           PY
 
           echo 'CONFIG_ZMK_KSCAN=n' >> zmk/app/prj.conf
