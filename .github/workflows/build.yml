@@ -99,14 +99,17 @@ jobs:
           cat zmk/app/boards/kinesis/adv360pro/board.yml
 
 
-
-      - name: Remove obsolete Nordic Kconfig block
+      - name: Patch Nordic compatibility for Zephyr 4.4
         working-directory: /tmp/zmk-config
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
+          # ------------------------------------------------------------
+          # 1. Remove ZMK's obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED
+          #    Kconfig override. Zephyr 4.4 no longer defines it.
+          # ------------------------------------------------------------
           path = Path("zmk/app/Kconfig")
           text = path.read_text()
 
@@ -127,12 +130,66 @@ jobs:
 
           path.write_text(text)
 
-          print("Removed obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED block")
+          print("Removed obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED Kconfig block")
+
+          # ------------------------------------------------------------
+          # 2. Zephyr 4.4 unconditionally builds Nordic's
+          #    validate_binding_headers.c.
+          #
+          #    That validator force-includes ZMK's external DT binding
+          #    headers without ZMK's app/include search path and fails.
+          #
+          #    Disable this build-time validation helper for our temporary
+          #    ZMK/Zephyr 4.4 compatibility build.
+          # ------------------------------------------------------------
+          path = Path("zephyr/soc/nordic/CMakeLists.txt")
+          text = path.read_text()
+
+          old = """zephyr_library_sources(
+            validate_base_addresses.c
+            validate_binding_headers.c
+            validate_enabled_instances.c
+            )
+          """
+
+          new = """zephyr_library_sources(
+            validate_base_addresses.c
+            validate_enabled_instances.c
+            )
+          """
+
+          if old not in text:
+              raise SystemExit(
+                  "Could not locate Nordic validate_binding_headers.c source block"
+              )
+
+          path.write_text(text.replace(old, new, 1))
+
+          print("Disabled Nordic validate_binding_headers.c build-time validator")
           PY
-          
+
+          echo
+          echo "=== VERIFY NORDIC VALIDATION PATCH ==="
+
+          if grep -n 'validate_binding_headers.c' zephyr/soc/nordic/CMakeLists.txt
+          then
+            echo "ERROR: validate_binding_headers.c is still enabled"
+            exit 1
+          else
+            echo "Nordic binding-header validator disabled"
+          fi
 
 
 
+
+      
+
+
+
+      
+
+
+      
       - name: Patch ZMK for Zephyr input-only matrix support
         working-directory: /tmp/zmk-config
         run: |
