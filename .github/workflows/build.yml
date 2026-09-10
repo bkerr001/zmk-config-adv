@@ -103,108 +103,109 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path("zmk/app/src/physical_layouts.c")
           text = path.read_text()
 
-          # Remove legacy Zephyr kscan header.
-          text, count = re.subn(
-              r'^#include <zephyr/drivers/kscan\.h>\n',
-              '',
-              text,
-              count=1,
-              flags=re.MULTILINE,
-          )
-          if count != 1:
-              raise SystemExit(f"Expected to remove 1 kscan include, removed {count}")
+          # 1. Remove legacy kscan header.
+          old = "#include <zephyr/drivers/kscan.h>\n"
+          if old not in text:
+              raise SystemExit("kscan header not found")
+          text = text.replace(old, "", 1)
 
-          # Remove legacy ZMK kscan callback.
-          text, count = re.subn(
-              r'static void zmk_physical_layout_kscan_callback\(.*?'
-              r'\n\}\n(?=static void zmk_physical_layouts_kscan_process_msgq)',
-              '',
-              text,
-              count=1,
-              flags=re.DOTALL,
-          )
-          if count != 1:
-              raise SystemExit(f"Expected to remove 1 legacy callback, removed {count}")
+          # 2. Remove the complete legacy kscan callback.
+          start_marker = "static void zmk_physical_layout_kscan_callback("
+          end_marker = "static void zmk_physical_layouts_kscan_process_msgq("
 
-          # Remove legacy kscan shutdown block.
-          text, count = re.subn(
-              r'    if \(active\) \{\n'
-              r'        if \(active->kscan\) \{\n'
-              r'.*?'
-              r'        \}\n'
-              r'    \}\n',
-              '',
-              text,
-              count=1,
-              flags=re.DOTALL,
-          )
-          if count != 1:
-              raise SystemExit(f"Expected to remove 1 kscan shutdown block, removed {count}")
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
 
-          # Remove legacy kscan startup block after active = dest_layout.
-          text, count = re.subn(
-              r'(    active = dest_layout;\n)'
-              r'    if \(active->kscan\) \{\n'
-              r'.*?'
-              r'    \}\n',
-              r'\1',
-              text,
-              count=1,
-              flags=re.DOTALL,
-          )
-          if count != 1:
-              raise SystemExit(f"Expected to remove 1 kscan startup block, removed {count}")
+          if start == -1 or end == -1:
+              raise SystemExit(
+                  f"Could not locate legacy callback: start={start}, end={end}"
+              )
+
+          text = text[:start] + text[end:]
+
+          # 3. Remove legacy kscan shutdown block.
+          old = """    if (active) {
+              if (active->kscan) {
+                  kscan_disable_callback(active->kscan);
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  pm_device_runtime_put(active->kscan);
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_SUSPEND);
+          #endif
+              }
+          }
+          """
+
+          if old not in text:
+              raise SystemExit("Could not locate legacy kscan shutdown block")
+
+          text = text.replace(old, "", 1)
+
+          # 4. Remove legacy kscan startup block, preserving active = dest_layout.
+          old = """    active = dest_layout;
+              if (active->kscan) {
+          #if IS_ENABLED(CONFIG_PM_DEVICE_RUNTIME)
+                  int err = pm_device_runtime_get(active->kscan);
+                  if (err < 0) {
+                      LOG_WRN("PM runtime get of kscan device to enable it %d", err);
+                      return err;
+                  }
+          #elif IS_ENABLED(CONFIG_PM_DEVICE)
+                  pm_device_action_run(active->kscan, PM_DEVICE_ACTION_RESUME);
+          #endif
+                  kscan_config(active->kscan, zmk_physical_layout_kscan_callback);
+                  kscan_enable_callback(active->kscan);
+              }
+          """
+
+          new = """    active = dest_layout;
+          """
+
+          if old not in text:
+              raise SystemExit("Could not locate legacy kscan startup block")
+
+          text = text.replace(old, new, 1)
 
           path.write_text(text)
 
-          print("Removed legacy kscan include/callback/startup/shutdown from physical_layouts.c")
+          print("Removed legacy kscan code from physical_layouts.c")
 
-          # Keep the event queue available for the newer Zephyr input path.
+          # 5. Make the event queue config available without ZMK_KSCAN.
           path = Path("zmk/app/Kconfig")
           text = path.read_text()
 
-          pattern = re.compile(
-              r'if ZMK_KSCAN\s+'
-              r'config ZMK_KSCAN_EVENT_QUEUE_SIZE\s+'
-              r'int "Size of the event queue for KSCAN events to buffer events"\s+'
-              r'default 4\s+'
-              r'endif # ZMK_KSCAN',
-              re.MULTILINE,
-          )
+          old = """if ZMK_KSCAN
 
-          replacement = '''config ZMK_KSCAN_EVENT_QUEUE_SIZE
+          config ZMK_KSCAN_EVENT_QUEUE_SIZE
+              int "Size of the event queue for KSCAN events to buffer events"
+              default 4
+
+          endif # ZMK_KSCAN
+          """
+
+          new = """config ZMK_KSCAN_EVENT_QUEUE_SIZE
               int "Size of the event queue for matrix input events to buffer events"
-              default 4'''
+              default 4
+          """
 
-          text, count = pattern.subn(replacement, text, count=1)
+          if old not in text:
+              raise SystemExit("Could not locate ZMK_KSCAN_EVENT_QUEUE_SIZE block")
 
-          if count != 1:
-              raise SystemExit(
-                  f"Expected to move 1 event queue Kconfig block, moved {count}"
-              )
+          path.write_text(text.replace(old, new, 1))
 
-          path.write_text(text)
-
-          print("Made matrix event queue independent of legacy ZMK_KSCAN")
+          print("Moved event queue config outside legacy ZMK_KSCAN")
           PY
 
           echo 'CONFIG_ZMK_KSCAN=n' >> zmk/app/prj.conf
 
-          echo "=== VERIFY NO LEGACY KSCAN HEADER ==="
-          if grep -n 'zephyr/drivers/kscan.h' zmk/app/src/physical_layouts.c; then
-            echo "ERROR: legacy kscan header still present"
-            exit 1
-          else
-            echo "Legacy kscan header removed"
-          fi
-
-          echo "=== VERIFY KSCAN CONFIG ==="
-          tail -5 zmk/app/prj.conf
+          echo
+          echo "=== VERIFY LEGACY KSCAN REFERENCES ==="
+          grep -nE 'drivers/kscan|kscan_(config|enable|disable)|zmk_physical_layout_kscan_callback' \
+            zmk/app/src/physical_layouts.c || true
       - name: Build XIAO nRF54LM20A test firmware
 
         working-directory: /tmp/zmk-config
