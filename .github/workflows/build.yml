@@ -97,6 +97,8 @@ jobs:
           echo
           echo "=== VERIFY ADV360 ==="
           cat zmk/app/boards/kinesis/adv360pro/board.yml
+o
+
 
 
       - name: Patch Nordic compatibility for Zephyr 4.4
@@ -303,6 +305,50 @@ jobs:
           else
             echo "Legacy kscan references successfully removed"
           fi
+
+
+      - name: Remove legacy settings-reset kscan
+        working-directory: /tmp/zmk-config
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("zmk/app/boards/shields/settings_reset/settings_reset.overlay")
+          text = path.read_text()
+
+          text = text.replace(
+              """    chosen {
+                  zmk,kscan = &settings_reset_kscan;
+              };
+
+          """,
+              "",
+              1,
+          )
+
+          text = text.replace(
+              """    settings_reset_kscan: settings_reset_kscan {
+                  compatible = "zmk,kscan-mock";
+                  columns = <1>;
+                  rows = <0>;
+
+                  events = <>;
+              };
+
+          """,
+              "",
+              1,
+          )
+
+          path.write_text(text)
+
+          print("Removed legacy settings_reset mock kscan")
+          PY
+
+          echo
+          echo "=== SETTINGS RESET OVERLAY ==="
+          cat zmk/app/boards/shields/settings_reset/settings_reset.overlay
+
 
 
 
