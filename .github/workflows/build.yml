@@ -97,174 +97,114 @@ jobs:
           echo
           echo "=== VERIFY ADV360 ==="
           cat zmk/app/boards/kinesis/adv360pro/board.yml
-      - name: Remove obsolete Nordic Kconfig block
+
+      - name: Patch ZMK for Zephyr input-only matrix support
         working-directory: /tmp/zmk-config
         run: |
           python3 - <<'PY'
           from pathlib import Path
           import re
 
+          path = Path("zmk/app/src/physical_layouts.c")
+          text = path.read_text()
+
+          # Remove legacy Zephyr kscan header.
+          text, count = re.subn(
+              r'^#include <zephyr/drivers/kscan\.h>\n',
+              '',
+              text,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          if count != 1:
+              raise SystemExit(f"Expected to remove 1 kscan include, removed {count}")
+
+          # Remove legacy ZMK kscan callback.
+          text, count = re.subn(
+              r'static void zmk_physical_layout_kscan_callback\(.*?'
+              r'\n\}\n(?=static void zmk_physical_layouts_kscan_process_msgq)',
+              '',
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"Expected to remove 1 legacy callback, removed {count}")
+
+          # Remove legacy kscan shutdown block.
+          text, count = re.subn(
+              r'    if \(active\) \{\n'
+              r'        if \(active->kscan\) \{\n'
+              r'.*?'
+              r'        \}\n'
+              r'    \}\n',
+              '',
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"Expected to remove 1 kscan shutdown block, removed {count}")
+
+          # Remove legacy kscan startup block after active = dest_layout.
+          text, count = re.subn(
+              r'(    active = dest_layout;\n)'
+              r'    if \(active->kscan\) \{\n'
+              r'.*?'
+              r'    \}\n',
+              r'\1',
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"Expected to remove 1 kscan startup block, removed {count}")
+
+          path.write_text(text)
+
+          print("Removed legacy kscan include/callback/startup/shutdown from physical_layouts.c")
+
+          # Keep the event queue available for the newer Zephyr input path.
           path = Path("zmk/app/Kconfig")
           text = path.read_text()
 
           pattern = re.compile(
-              r'\nif SOC_FAMILY_NORDIC_NRF\s+'
-              r'config NRF_SOC_VALIDATE_HEADERS_DISABLED\s+'
-              r'default y\s+'
-              r'endif\s*',
-              re.MULTILINE
+              r'if ZMK_KSCAN\s+'
+              r'config ZMK_KSCAN_EVENT_QUEUE_SIZE\s+'
+              r'int "Size of the event queue for KSCAN events to buffer events"\s+'
+              r'default 4\s+'
+              r'endif # ZMK_KSCAN',
+              re.MULTILINE,
           )
 
-          text, count = pattern.subn("\n", text, count=1)
+          replacement = '''config ZMK_KSCAN_EVENT_QUEUE_SIZE
+              int "Size of the event queue for matrix input events to buffer events"
+              default 4'''
+
+          text, count = pattern.subn(replacement, text, count=1)
 
           if count != 1:
               raise SystemExit(
-                  f"Expected to remove 1 NRF_SOC_VALIDATE_HEADERS_DISABLED block, removed {count}"
+                  f"Expected to move 1 event queue Kconfig block, moved {count}"
               )
 
           path.write_text(text)
 
-          print("Removed obsolete NRF_SOC_VALIDATE_HEADERS_DISABLED block")
-          PY
-      - name: Patch ZMK for Zephyr input-only matrix support
-        working-directory: /tmp/zmk-config
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("zmk/app/src/physical_layouts.c")
-          lines = path.read_text().splitlines()
-
-          out = []
-          i = 0
-
-          while i < len(lines):
-              line = lines[i]
-
-              # 1. Guard legacy kscan header.
-              if line == "#include <zephyr/drivers/kscan.h>":
-                  out.extend([
-                      "#if IS_ENABLED(CONFIG_ZMK_KSCAN)",
-                      line,
-                      "#endif",
-                  ])
-                  i += 1
-                  continue
-
-              # 2. Guard legacy kscan callback.
-              if line.startswith("static void zmk_physical_layout_kscan_callback("):
-                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
-
-                  while i < len(lines):
-                      out.append(lines[i])
-
-                      if lines[i] == "}":
-                          i += 1
-                          break
-
-                      i += 1
-
-                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
-                  continue
-
-              # 3. Guard shutdown block.
-              if line == "    if (active) {" and i + 1 < len(lines) and lines[i + 1] == "        if (active->kscan) {":
-                  out.append(line)
-                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
-                  i += 1
-
-                  depth = 0
-                  while i < len(lines):
-                      current = lines[i]
-                      out.append(current)
-
-                      depth += current.count("{")
-                      depth -= current.count("}")
-
-                      i += 1
-
-                      if depth == 0:
-                          break
-
-                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
-
-                  # Preserve the closing brace for if (active).
-                  if i < len(lines) and lines[i] == "    }":
-                      out.append(lines[i])
-                      i += 1
-
-                  continue
-
-              # 4. Guard startup block.
-              if line == "    if (active->kscan) {" and i > 0 and lines[i - 1] == "    active = dest_layout;":
-                  out.append("#if IS_ENABLED(CONFIG_ZMK_KSCAN)")
-
-                  depth = 0
-                  while i < len(lines):
-                      current = lines[i]
-                      out.append(current)
-
-                      depth += current.count("{")
-                      depth -= current.count("}")
-
-                      i += 1
-
-                      if depth == 0:
-                          break
-
-                  out.append("#endif /* CONFIG_ZMK_KSCAN */")
-                  continue
-
-              out.append(line)
-              i += 1
-
-          path.write_text("\n".join(out) + "\n")
-
-          # Move ZMK_KSCAN_EVENT_QUEUE_SIZE outside the legacy KSCAN conditional.
-          path = Path("zmk/app/Kconfig")
-          lines = path.read_text().splitlines()
-
-          out = []
-          i = 0
-          patched_queue = False
-
-          while i < len(lines):
-              if (
-                  i + 6 < len(lines)
-                  and lines[i] == "if ZMK_KSCAN"
-                  and lines[i + 2] == "config ZMK_KSCAN_EVENT_QUEUE_SIZE"
-              ):
-                  out.extend([
-                      "config ZMK_KSCAN_EVENT_QUEUE_SIZE",
-                      '    int "Size of the event queue for matrix input events to buffer events"',
-                      "    default 4",
-                  ])
-
-                  # Skip:
-                  # if ZMK_KSCAN
-                  # blank
-                  # config ...
-                  # int ...
-                  # default ...
-                  # blank
-                  # endif ...
-                  i += 7
-                  patched_queue = True
-                  continue
-
-              out.append(lines[i])
-              i += 1
-
-          if not patched_queue:
-              raise SystemExit("Could not locate ZMK_KSCAN_EVENT_QUEUE_SIZE block")
-
-          path.write_text("\n".join(out) + "\n")
-
-          print("Patched physical_layouts.c for input-only operation")
-          print("Moved matrix event queue config outside legacy ZMK_KSCAN")
+          print("Made matrix event queue independent of legacy ZMK_KSCAN")
           PY
 
           echo 'CONFIG_ZMK_KSCAN=n' >> zmk/app/prj.conf
+
+          echo "=== VERIFY NO LEGACY KSCAN HEADER ==="
+          if grep -n 'zephyr/drivers/kscan.h' zmk/app/src/physical_layouts.c; then
+            echo "ERROR: legacy kscan header still present"
+            exit 1
+          else
+            echo "Legacy kscan header removed"
+          fi
+
+          echo "=== VERIFY KSCAN CONFIG ==="
+          tail -5 zmk/app/prj.conf
       - name: Build XIAO nRF54LM20A test firmware
 
         working-directory: /tmp/zmk-config
